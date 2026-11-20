@@ -1,0 +1,86 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', 'Noto Sans Bengali', system-ui, -apple-system, sans-serif;
+    --font-display: var(--font-sans);
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    --mint-50: #ECFDF5;
+    --mint-100: #D1FAE5;
+    --mint-200: #A7F3D0;
+    --mint-300: #6EE7B7;
+    --mint-400: #34D399;
+    --mint-500: #10B981;
+    --mint-600: #059669;
+    --mint-700: #047857;
+    --mint-800: #065F46;
+    --mint-900: #064E3B;
+    --mint-950: #032219;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #F6FAF8;
+    color: #0F172A;
+    transition: background-color 180ms cubic-bezier(0.16, 1, 0.3, 1), color 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  html.dark body {
+    background-color: #07120E;
+    color: #ECFDF5;
+  }
+
+  html.high-contrast body {
+    background-color: #FFFFFF;
+    color: #000000;
+  }
+
+  html.dark.high-contrast body {
+    background-color: #000000;
+    color: #FFFFFF;
+  }
+}
+
+.font-display {
+  font-family: var(--font-sans);
+}
+
+.font-mono-tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+/* Hide native scrollbars for interactive horizontal carousel while keeping smooth scrolling */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

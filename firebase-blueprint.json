@@ -1,0 +1,415 @@
+{
+  "entities": {
+    "UserPublic": {
+      "title": "UserPublic",
+      "description": "Public role and district profile for a Legal BD user without PII.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "role": {
+          "type": "string",
+          "enum": ["citizen", "dlao_officer", "panel_lawyer", "mediator", "supervisor", "admin"]
+        },
+        "district": { "type": "string", "maxLength": 60 },
+        "barRegistrationNo": { "type": "string", "maxLength": 60 },
+        "specialization": { "type": "string", "maxLength": 100 },
+        "preferredLanguage": { "type": "string", "enum": ["en", "bn"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "role", "district", "preferredLanguage", "createdAt", "updatedAt"]
+    },
+    "UserPrivate": {
+      "title": "UserPrivate",
+      "description": "Isolated PII record for a user (email, phone, NID, address).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "nidLast4": { "type": "string", "maxLength": 10 },
+        "address": { "type": "string", "maxLength": 250 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "updatedAt"]
+    },
+    "LegalCase": {
+      "title": "LegalCase",
+      "description": "Unified digital legal aid case record under One Citizen, One Case ID.",
+      "type": "object",
+      "properties": {
+        "caseId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "caseNumber": { "type": "string", "maxLength": 32, "pattern": "^LBD-[0-9]{4}-[0-9]{4,6}$" },
+        "citizenUid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "citizenName": { "type": "string", "maxLength": 100 },
+        "safeContactNote": { "type": "string", "maxLength": 200 },
+        "consentGiven": { "type": "boolean" },
+        "channel": {
+          "type": "string",
+          "enum": ["web", "helpline_16699", "ussd_16699", "udc_assisted", "dlao_referral"]
+        },
+        "district": { "type": "string", "maxLength": 60 },
+        "upazila": { "type": "string", "maxLength": 60 },
+        "category": {
+          "type": "string",
+          "enum": [
+            "family_maintenance",
+            "land_property",
+            "domestic_violence",
+            "labor_wages",
+            "civil_dispute",
+            "criminal_defense"
+          ]
+        },
+        "title": { "type": "string", "maxLength": 160 },
+        "description": { "type": "string", "maxLength": 2500 },
+        "priority": { "type": "string", "enum": ["critical", "high", "medium", "standard"] },
+        "status": {
+          "type": "string",
+          "enum": [
+            "submitted",
+            "dlao_review",
+            "approved",
+            "lawyer_assigned",
+            "in_mediation",
+            "court_proceeding",
+            "settled",
+            "closed",
+            "rejected"
+          ]
+        },
+        "eligibilityVerified": { "type": "boolean" },
+        "emergencyFlag": { "type": "boolean" },
+        "assignedLawyerUid": { "type": "string", "maxLength": 128 },
+        "assignedLawyerName": { "type": "string", "maxLength": 100 },
+        "assignedMediatorUid": { "type": "string", "maxLength": 128 },
+        "assignedMediatorName": { "type": "string", "maxLength": 100 },
+        "nextHearingDate": { "type": "string", "maxLength": 40 },
+        "deadlineDate": { "type": "string", "maxLength": 40 },
+        "requiredDocs": { "type": "array", "maxLength": 10 },
+        "submittedDocs": { "type": "array", "maxLength": 10 },
+        "aiClassification": { "type": "string", "maxLength": 200 },
+        "aiSummary": { "type": "string", "maxLength": 1200 },
+        "aiRiskNote": { "type": "string", "maxLength": 400 },
+        "aiConfidence": { "type": "string", "enum": ["high", "moderate", "low"] },
+        "aiUncertaintyNote": { "type": "string", "maxLength": 500 },
+        "aiExtractedFacts": { "type": "array", "maxLength": 10 },
+        "aiMissingInfo": { "type": "array", "maxLength": 10 },
+        "aiFollowUpQuestions": { "type": "array", "maxLength: 8 },
+        "aiCitations": { "type": "array", "maxLength": 8 },
+        "aiNextSteps": { "type": "array", "maxLength": 8 },
+        "aiReviewStatus": { "type": "string", "enum": ["pending_review", "approved", "corrected", "overridden"] },
+        "aiOfficerNote": { "type": "string", "maxLength": 600 },
+        "aiReviewedByName": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "caseId",
+        "caseNumber",
+        "citizenUid",
+        "citizenName",
+        "consentGiven",
+        "channel",
+        "district",
+        "upazila",
+        "category",
+        "title",
+        "description",
+        "priority",
+        "status",
+        "eligibilityVerified",
+        "emergencyFlag",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CasePublicStatus": {
+      "title": "CasePublicStatus",
+      "description": "Public non-PII status lookup keyed by unified Case Number.",
+      "type": "object",
+      "properties": {
+        "caseNumber": { "type": "string", "maxLength": 32, "pattern": "^LBD-[0-9]{4}-[0-9]{4,6}$" },
+        "district": { "type": "string", "maxLength": 60 },
+        "category": { "type": "string", "maxLength": 60 },
+        "status": { "type": "string", "maxLength": 40 },
+        "channel": { "type": "string", "maxLength": 40 },
+        "nextHearingDate": { "type": "string", "maxLength": 40 },
+        "ownerUid": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["caseNumber", "district", "category", "status", "channel", "ownerUid", "updatedAt"]
+    },
+    "CaseTimelineEvent": {
+      "title": "CaseTimelineEvent",
+      "description": "Chronological milestone or officer note inside a case.",
+      "type": "object",
+      "properties": {
+        "eventId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "caseId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "caseOwnerUid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "caseLawyerUid": { "type": "string", "maxLength": 128 },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorName": { "type": "string", "maxLength": 100 },
+        "actorRole": { "type": "string", "maxLength": 40 },
+        "actionType": { "type": "string", "maxLength": 60 },
+        "note": { "type": "string", "maxLength": 600 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["eventId", "caseId", "caseOwnerUid", "actorUid", "actorName", "actorRole", "actionType", "note", "createdAt"]
+    },
+    "CaseMessage": {
+      "title": "CaseMessage",
+      "description": "Real-time communication message between citizen and assigned legal counsel.",
+      "type": "object",
+      "properties": {
+        "messageId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "caseId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "caseOwnerUid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "caseLawyerUid": { "type": "string", "maxLength": 128 },
+        "senderUid": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 100 },
+        "senderRole": { "type": "string", "maxLength": 40 },
+        "text": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["messageId", "caseId", "caseOwnerUid", "senderUid", "senderName", "senderRole", "text", "createdAt"]
+    },
+    "CaseDocumentRecord": {
+      "title": "CaseDocumentRecord",
+      "description": "AI-processed document evidence metadata and traceable OCR facts (no raw binary stored in Firestore).",
+      "type": "object",
+      "properties": {
+        "docId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "caseId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "caseOwnerUid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "caseLawyerUid": { "type": "string", "maxLength": 128 },
+        "uploadedByUid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "uploadedByName": { "type": "string", "maxLength": 100 },
+        "fileName": { "type": "string", "maxLength": 160 },
+        "mimeType": { "type": "string", "maxLength": 80 },
+        "fileSizeBytes": { "type": "integer" },
+        "detectedType": { "type": "string", "maxLength": 120 },
+        "summary": { "type": "string", "maxLength": 1200 },
+        "traceableFacts": { "type": "array", "maxLength": 10 },
+        "missingFields": { "type": "array", "maxLength": 8 },
+        "legibilityConfidence": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "docId",
+        "caseId",
+        "caseOwnerUid",
+        "uploadedByUid",
+        "uploadedByName",
+        "fileName",
+        "mimeType",
+        "fileSizeBytes",
+        "detectedType",
+        "summary",
+        "traceableFacts",
+        "missingFields",
+        "legibilityConfidence",
+        "createdAt"
+      ]
+    },
+    "MediationSession": {
+      "title": "MediationSession",
+      "description": "Digital mediation session schedule, attendance, and settlement record.",
+      "type": "object",
+      "properties": {
+        "mediationId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "caseId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "caseNumber": { "type": "string", "maxLength": 32 },
+        "citizenUid": { "type": "string", "maxLength": 128 },
+        "mediatorUid": { "type": "string", "maxLength": 128 },
+        "mediatorName": { "type": "string", "maxLength": 100 },
+        "district": { "type": "string", "maxLength": 60 },
+        "scheduledAt": { "type": "string", "maxLength": 60 },
+        "mode": { "type": "string", "enum": ["in_person", "video_call", "hybrid"] },
+        "applicantConfirmed": { "type": "boolean" },
+        "respondentConfirmed": { "type": "boolean" },
+        "outcome": {
+          "type": "string",
+          "enum": ["scheduled", "settled_amicably", "partial_settlement", "adjourned", "referred_to_court"]
+        },
+        "settlementTerms": { "type": "string", "maxLength": 1500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "mediationId",
+        "caseId",
+        "caseNumber",
+        "citizenUid",
+        "mediatorUid",
+        "mediatorName",
+        "district",
+        "scheduledAt",
+        "mode",
+        "applicantConfirmed",
+        "respondentConfirmed",
+        "outcome",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CaseReferral": {
+      "title": "CaseReferral",
+      "description": "Inter-district case referral and transfer workflow record.",
+      "type": "object",
+      "properties": {
+        "referralId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "caseId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "caseNumber": { "type": "string", "maxLength": 32 },
+        "citizenUid": { "type": "string", "maxLength": 128 },
+        "fromDistrict": { "type": "string", "maxLength": 60 },
+        "toDistrict": { "type": "string", "maxLength": 60 },
+        "reason": { "type": "string", "maxLength": 600 },
+        "status": { "type": "string", "enum": ["pending", "accepted", "acknowledged", "declined"] },
+        "requestedByUid": { "type": "string", "maxLength": 128 },
+        "requestedByName": { "type": "string", "maxLength": 100 },
+        "handledByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "referralId",
+        "caseId",
+        "caseNumber",
+        "citizenUid",
+        "fromDistrict",
+        "toDistrict",
+        "reason",
+        "status",
+        "requestedByUid",
+        "requestedByName",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CommitteeMeeting": {
+      "title": "CommitteeMeeting",
+      "description": "District Legal Aid Committee supervisory meeting minutes and decisions.",
+      "type": "object",
+      "properties": {
+        "meetingId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "district": { "type": "string", "maxLength": 60 },
+        "chairpersonName": { "type": "string", "maxLength": 100 },
+        "meetingDate": { "type": "string", "maxLength": 40 },
+        "agenda": { "type": "string", "maxLength": 400 },
+        "decisions": { "type": "string", "maxLength": 1500 },
+        "casesReviewedCount": { "type": "integer" },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "meetingId",
+        "district",
+        "chairpersonName",
+        "meetingDate",
+        "agenda",
+        "decisions",
+        "casesReviewedCount",
+        "createdByUid",
+        "createdAt"
+      ]
+    },
+    "Complaint": {
+      "title": "Complaint",
+      "description": "Service complaint or exception escalation record.",
+      "type": "object",
+      "properties": {
+        "complaintId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "caseNumber": { "type": "string", "maxLength": 32 },
+        "reporterUid": { "type": "string", "maxLength": 128 },
+        "reporterName": { "type": "string", "maxLength": 100 },
+        "district": { "type": "string", "maxLength": 60 },
+        "subject": { "type": "string", "maxLength": 200 },
+        "details": { "type": "string", "maxLength": 1200 },
+        "status": { "type": "string", "enum": ["open", "investigating", "resolved"] },
+        "resolutionNote": { "type": "string", "maxLength": 800 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "complaintId",
+        "reporterUid",
+        "reporterName",
+        "district",
+        "subject",
+        "details",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable activity and security audit trail.",
+      "type": "object",
+      "properties": {
+        "logId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorName": { "type": "string", "maxLength": 100 },
+        "actorRole": { "type": "string", "maxLength": 40 },
+        "action": { "type": "string", "maxLength": 80 },
+        "targetPath": { "type": "string", "maxLength": 160 },
+        "summary": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["logId", "actorUid", "actorName", "actorRole", "action", "targetPath", "summary", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserPublic" },
+      "description": "Public profile with role and district."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivate" },
+      "description": "PII isolated profile document."
+    },
+    "/cases/{caseId}": {
+      "schema": { "$ref": "#/entities/LegalCase" },
+      "description": "Centralized digital legal aid cases."
+    },
+    "/casePublicStatus/{caseNumber}": {
+      "schema": { "$ref": "#/entities/CasePublicStatus" },
+      "description": "Public non-PII case tracking status lookup."
+    },
+    "/cases/{caseId}/timeline/{eventId}": {
+      "schema": { "$ref": "#/entities/CaseTimelineEvent" },
+      "description": "Case history and activity timeline."
+    },
+    "/cases/{caseId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/CaseMessage" },
+      "description": "Real-time citizen and counsel case updates."
+    },
+    "/cases/{caseId}/documents/{docId}": {
+      "schema": { "$ref": "#/entities/CaseDocumentRecord" },
+      "description": "Traceable AI-extracted supporting document records."
+    },
+    "/mediations/{mediationId}": {
+      "schema": { "$ref": "#/entities/MediationSession" },
+      "description": "Digital mediation sessions and outcomes."
+    },
+    "/referrals/{referralId}": {
+      "schema": { "$ref": "#/entities/CaseReferral" },
+      "description": "Inter-district case referrals."
+    },
+    "/committeeMeetings/{meetingId}": {
+      "schema": { "$ref": "#/entities/CommitteeMeeting" },
+      "description": "Supervisory district committee meeting minutes."
+    },
+    "/complaints/{complaintId}": {
+      "schema": { "$ref": "#/entities/Complaint" },
+      "description": "Complaints and exception escalations."
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Real-time activity audit logs."
+    }
+  }
+}

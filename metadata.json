@@ -1,0 +1,6 @@
+{
+  "name": "JurisConnect — Bridging People to Justice.",
+  "description": "An AI-powered Legal Aid Intelligence & Case Management Platform for real-time citizen intake, DLAO triage, panel counsel coordination, and digital mediation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

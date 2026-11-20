@@ -1,0 +1,612 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Global Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+    function isBootstrappedAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'wasinahmed805@gmail.com';
+    }
+    function isAdmin() {
+      return isBootstrappedAdmin() || (isVerifiedUser() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    function hasUserDoc() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    function userRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isOfficerOrSupervisor() {
+      return isAdmin() || (hasUserDoc() && userRole() in ['dlao_officer', 'supervisor', 'admin']);
+    }
+    function isPanelLawyer() {
+      return isAdmin() || (hasUserDoc() && userRole() == 'panel_lawyer');
+    }
+    function isMediatorUser() {
+      return isAdmin() || (hasUserDoc() && userRole() == 'mediator');
+    }
+
+    // 3. Entity Validation Blueprints
+    function isValidUserPublic(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'role', 'district', 'preferredLanguage', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'role', 'district', 'barRegistrationNo', 'specialization', 'preferredLanguage', 'createdAt', 'updatedAt'])
+        && data.uid == userId
+        && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100
+        && data.role in ['citizen', 'dlao_officer', 'panel_lawyer', 'mediator', 'supervisor', 'admin']
+        && data.district is string && data.district.size() >= 1 && data.district.size() <= 60
+        && data.preferredLanguage in ['en', 'bn']
+        && (!('barRegistrationNo' in data) || (data.barRegistrationNo is string && data.barRegistrationNo.size() <= 60))
+        && (!('specialization' in data) || (data.specialization is string && data.specialization.size() <= 100))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivate(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'phone', 'nidLast4', 'address', 'updatedAt'])
+        && data.uid == userId
+        && isValidId(data.uid)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 30))
+        && (!('nidLast4' in data) || (data.nidLast4 is string && data.nidLast4.size() <= 10))
+        && (!('address' in data) || (data.address is string && data.address.size() <= 250))
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidStringArray(arr, maxItems) {
+      return arr is list && arr.size() <= maxItems && (arr.size() == 0 || arr[0] is string);
+    }
+
+    function isValidLegalCase(data, caseId) {
+      return data.keys().hasAll([
+          'caseId', 'caseNumber', 'citizenUid', 'citizenName', 'consentGiven',
+          'channel', 'district', 'upazila', 'category', 'title', 'description',
+          'priority', 'status', 'eligibilityVerified', 'emergencyFlag', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'caseId', 'caseNumber', 'citizenUid', 'citizenName', 'safeContactNote', 'consentGiven',
+          'channel', 'district', 'upazila', 'category', 'title', 'description',
+          'priority', 'status', 'eligibilityVerified', 'emergencyFlag',
+          'assignedLawyerUid', 'assignedLawyerName', 'assignedMediatorUid', 'assignedMediatorName',
+          'nextHearingDate', 'deadlineDate', 'requiredDocs', 'submittedDocs',
+          'aiClassification', 'aiSummary', 'aiRiskNote',
+          'aiConfidence', 'aiUncertaintyNote', 'aiExtractedFacts', 'aiMissingInfo',
+          'aiFollowUpQuestions', 'aiCitations', 'aiNextSteps',
+          'aiReviewStatus', 'aiOfficerNote', 'aiReviewedByName',
+          'createdAt', 'updatedAt'
+        ])
+        && data.caseId == caseId && isValidId(data.caseId)
+        && data.caseNumber is string && data.caseNumber.size() >= 8 && data.caseNumber.size() <= 32
+        && data.caseNumber.matches('^LBD-[0-9]{4}-[0-9]{4,6}$')
+        && isValidId(data.citizenUid)
+        && data.citizenName is string && data.citizenName.size() >= 1 && data.citizenName.size() <= 100
+        && (!('safeContactNote' in data) || (data.safeContactNote is string && data.safeContactNote.size() <= 200))
+        && data.consentGiven is bool && data.consentGiven == true
+        && data.channel in ['web', 'helpline_16699', 'ussd_16699', 'udc_assisted', 'dlao_referral']
+        && data.district is string && data.district.size() >= 1 && data.district.size() <= 60
+        && data.upazila is string && data.upazila.size() >= 1 && data.upazila.size() <= 60
+        && data.category in ['family_maintenance', 'land_property', 'domestic_violence', 'labor_wages', 'civil_dispute', 'criminal_defense']
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 160
+        && data.description is string && data.description.size() >= 5 && data.description.size() <= 2500
+        && data.priority in ['critical', 'high', 'medium', 'standard']
+        && data.status in ['submitted', 'dlao_review', 'approved', 'lawyer_assigned', 'in_mediation', 'court_proceeding', 'settled', 'closed', 'rejected']
+        && data.eligibilityVerified is bool
+        && data.emergencyFlag is bool
+        && (!('assignedLawyerUid' in data) || (data.assignedLawyerUid is string && data.assignedLawyerUid.size() <= 128))
+        && (!('assignedLawyerName' in data) || (data.assignedLawyerName is string && data.assignedLawyerName.size() <= 100))
+        && (!('assignedMediatorUid' in data) || (data.assignedMediatorUid is string && data.assignedMediatorUid.size() <= 128))
+        && (!('assignedMediatorName' in data) || (data.assignedMediatorName is string && data.assignedMediatorName.size() <= 100))
+        && (!('nextHearingDate' in data) || (data.nextHearingDate is string && data.nextHearingDate.size() <= 40))
+        && (!('deadlineDate' in data) || (data.deadlineDate is string && data.deadlineDate.size() <= 40))
+        && (!('requiredDocs' in data) || isValidStringArray(data.requiredDocs, 10))
+        && (!('submittedDocs' in data) || isValidStringArray(data.submittedDocs, 10))
+        && (!('aiClassification' in data) || (data.aiClassification is string && data.aiClassification.size() <= 200))
+        && (!('aiSummary' in data) || (data.aiSummary is string && data.aiSummary.size() <= 1200))
+        && (!('aiRiskNote' in data) || (data.aiRiskNote is string && data.aiRiskNote.size() <= 400))
+        && (!('aiConfidence' in data) || data.aiConfidence in ['high', 'moderate', 'low'])
+        && (!('aiUncertaintyNote' in data) || (data.aiUncertaintyNote is string && data.aiUncertaintyNote.size() <= 500))
+        && (!('aiExtractedFacts' in data) || isValidStringArray(data.aiExtractedFacts, 10))
+        && (!('aiMissingInfo' in data) || isValidStringArray(data.aiMissingInfo, 10))
+        && (!('aiFollowUpQuestions' in data) || isValidStringArray(data.aiFollowUpQuestions, 8))
+        && (!('aiCitations' in data) || isValidStringArray(data.aiCitations, 8))
+        && (!('aiNextSteps' in data) || isValidStringArray(data.aiNextSteps, 8))
+        && (!('aiReviewStatus' in data) || data.aiReviewStatus in ['pending_review', 'approved', 'corrected', 'overridden'])
+        && (!('aiOfficerNote' in data) || (data.aiOfficerNote is string && data.aiOfficerNote.size() <= 600))
+        && (!('aiReviewedByName' in data) || (data.aiReviewedByName is string && data.aiReviewedByName.size() <= 100))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCasePublicStatus(data, caseNumber) {
+      return data.keys().hasAll(['caseNumber', 'district', 'category', 'status', 'channel', 'ownerUid', 'updatedAt'])
+        && data.keys().hasOnly(['caseNumber', 'district', 'category', 'status', 'channel', 'nextHearingDate', 'ownerUid', 'updatedAt'])
+        && data.caseNumber == caseNumber
+        && data.caseNumber is string && data.caseNumber.matches('^LBD-[0-9]{4}-[0-9]{4,6}$')
+        && data.district is string && data.district.size() <= 60
+        && data.category is string && data.category.size() <= 60
+        && data.status is string && data.status.size() <= 40
+        && data.channel is string && data.channel.size() <= 40
+        && (!('nextHearingDate' in data) || (data.nextHearingDate is string && data.nextHearingDate.size() <= 40))
+        && isValidId(data.ownerUid)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTimelineEvent(data, eventId, caseId) {
+      return data.keys().hasAll(['eventId', 'caseId', 'caseOwnerUid', 'actorUid', 'actorName', 'actorRole', 'actionType', 'note', 'createdAt'])
+        && data.keys().hasOnly(['eventId', 'caseId', 'caseOwnerUid', 'caseLawyerUid', 'actorUid', 'actorName', 'actorRole', 'actionType', 'note', 'createdAt'])
+        && data.eventId == eventId && isValidId(data.eventId)
+        && data.caseId == caseId && isValidId(data.caseId)
+        && isValidId(data.caseOwnerUid)
+        && (!('caseLawyerUid' in data) || (data.caseLawyerUid is string && data.caseLawyerUid.size() <= 128))
+        && isValidId(data.actorUid)
+        && data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 100
+        && data.actorRole is string && data.actorRole.size() >= 1 && data.actorRole.size() <= 40
+        && data.actionType is string && data.actionType.size() >= 1 && data.actionType.size() <= 60
+        && data.note is string && data.note.size() >= 1 && data.note.size() <= 600
+        && data.createdAt is timestamp;
+    }
+
+    function isValidCaseMessage(data, messageId, caseId) {
+      return data.keys().hasAll(['messageId', 'caseId', 'caseOwnerUid', 'senderUid', 'senderName', 'senderRole', 'text', 'createdAt'])
+        && data.keys().hasOnly(['messageId', 'caseId', 'caseOwnerUid', 'caseLawyerUid', 'senderUid', 'senderName', 'senderRole', 'text', 'createdAt'])
+        && data.messageId == messageId && isValidId(data.messageId)
+        && data.caseId == caseId && isValidId(data.caseId)
+        && isValidId(data.caseOwnerUid)
+        && (!('caseLawyerUid' in data) || (data.caseLawyerUid is string && data.caseLawyerUid.size() <= 128))
+        && isValidId(data.senderUid)
+        && data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 100
+        && data.senderRole is string && data.senderRole.size() >= 1 && data.senderRole.size() <= 40
+        && data.text is string && data.text.size() >= 1 && data.text.size() <= 1000
+        && data.createdAt is timestamp;
+    }
+
+    function isValidCaseDocument(data, docId, caseId) {
+      return data.keys().hasAll([
+          'docId', 'caseId', 'caseOwnerUid', 'uploadedByUid', 'uploadedByName',
+          'fileName', 'mimeType', 'fileSizeBytes', 'detectedType', 'summary',
+          'traceableFacts', 'missingFields', 'legibilityConfidence', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'docId', 'caseId', 'caseOwnerUid', 'caseLawyerUid', 'uploadedByUid', 'uploadedByName',
+          'fileName', 'mimeType', 'fileSizeBytes', 'detectedType', 'summary',
+          'traceableFacts', 'missingFields', 'legibilityConfidence', 'createdAt'
+        ])
+        && data.docId == docId && isValidId(data.docId)
+        && data.caseId == caseId && isValidId(data.caseId)
+        && isValidId(data.caseOwnerUid)
+        && (!('caseLawyerUid' in data) || (data.caseLawyerUid is string && data.caseLawyerUid.size() <= 128))
+        && isValidId(data.uploadedByUid)
+        && data.uploadedByName is string && data.uploadedByName.size() >= 1 && data.uploadedByName.size() <= 100
+        && data.fileName is string && data.fileName.size() >= 1 && data.fileName.size() <= 160
+        && data.mimeType is string && data.mimeType.size() >= 3 && data.mimeType.size() <= 80
+        && data.fileSizeBytes is int && data.fileSizeBytes >= 0 && data.fileSizeBytes <= 10485760
+        && data.detectedType is string && data.detectedType.size() >= 1 && data.detectedType.size() <= 120
+        && data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 1200
+        && isValidStringArray(data.traceableFacts, 10)
+        && isValidStringArray(data.missingFields, 8)
+        && data.legibilityConfidence is string && data.legibilityConfidence.size() >= 1 && data.legibilityConfidence.size() <= 40
+        && data.createdAt is timestamp;
+    }
+
+    function isValidMediation(data, mediationId) {
+      return data.keys().hasAll([
+          'mediationId', 'caseId', 'caseNumber', 'citizenUid', 'mediatorUid', 'mediatorName',
+          'district', 'scheduledAt', 'mode', 'applicantConfirmed', 'respondentConfirmed',
+          'outcome', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'mediationId', 'caseId', 'caseNumber', 'citizenUid', 'mediatorUid', 'mediatorName',
+          'district', 'scheduledAt', 'mode', 'applicantConfirmed', 'respondentConfirmed',
+          'outcome', 'settlementTerms', 'createdAt', 'updatedAt'
+        ])
+        && data.mediationId == mediationId && isValidId(data.mediationId)
+        && isValidId(data.caseId)
+        && data.caseNumber is string && data.caseNumber.size() <= 32
+        && isValidId(data.citizenUid)
+        && isValidId(data.mediatorUid)
+        && data.mediatorName is string && data.mediatorName.size() >= 1 && data.mediatorName.size() <= 100
+        && data.district is string && data.district.size() >= 1 && data.district.size() <= 60
+        && data.scheduledAt is string && data.scheduledAt.size() >= 1 && data.scheduledAt.size() <= 60
+        && data.mode in ['in_person', 'video_call', 'hybrid']
+        && data.applicantConfirmed is bool
+        && data.respondentConfirmed is bool
+        && data.outcome in ['scheduled', 'settled_amicably', 'partial_settlement', 'adjourned', 'referred_to_court']
+        && (!('settlementTerms' in data) || (data.settlementTerms is string && data.settlementTerms.size() <= 1500))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidReferral(data, referralId) {
+      return data.keys().hasAll([
+          'referralId', 'caseId', 'caseNumber', 'citizenUid', 'fromDistrict', 'toDistrict',
+          'reason', 'status', 'requestedByUid', 'requestedByName', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'referralId', 'caseId', 'caseNumber', 'citizenUid', 'fromDistrict', 'toDistrict',
+          'reason', 'status', 'requestedByUid', 'requestedByName', 'handledByUid', 'createdAt', 'updatedAt'
+        ])
+        && data.referralId == referralId && isValidId(data.referralId)
+        && isValidId(data.caseId)
+        && data.caseNumber is string && data.caseNumber.size() <= 32
+        && isValidId(data.citizenUid)
+        && data.fromDistrict is string && data.fromDistrict.size() >= 1 && data.fromDistrict.size() <= 60
+        && data.toDistrict is string && data.toDistrict.size() >= 1 && data.toDistrict.size() <= 60
+        && data.reason is string && data.reason.size() >= 3 && data.reason.size() <= 600
+        && data.status in ['pending', 'accepted', 'acknowledged', 'declined']
+        && isValidId(data.requestedByUid)
+        && data.requestedByName is string && data.requestedByName.size() >= 1 && data.requestedByName.size() <= 100
+        && (!('handledByUid' in data) || (data.handledByUid is string && data.handledByUid.size() <= 128))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidMeeting(data, meetingId) {
+      return data.keys().hasAll(['meetingId', 'district', 'chairpersonName', 'meetingDate', 'agenda', 'decisions', 'casesReviewedCount', 'createdByUid', 'createdAt'])
+        && data.keys().hasOnly(['meetingId', 'district', 'chairpersonName', 'meetingDate', 'agenda', 'decisions', 'casesReviewedCount', 'createdByUid', 'createdAt'])
+        && data.meetingId == meetingId && isValidId(data.meetingId)
+        && data.district is string && data.district.size() >= 1 && data.district.size() <= 60
+        && data.chairpersonName is string && data.chairpersonName.size() >= 1 && data.chairpersonName.size() <= 100
+        && data.meetingDate is string && data.meetingDate.size() >= 1 && data.meetingDate.size() <= 40
+        && data.agenda is string && data.agenda.size() >= 3 && data.agenda.size() <= 400
+        && data.decisions is string && data.decisions.size() >= 3 && data.decisions.size() <= 1500
+        && data.casesReviewedCount is int && data.casesReviewedCount >= 0 && data.casesReviewedCount <= 10000
+        && isValidId(data.createdByUid)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidComplaint(data, complaintId) {
+      return data.keys().hasAll(['complaintId', 'reporterUid', 'reporterName', 'district', 'subject', 'details', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['complaintId', 'caseNumber', 'reporterUid', 'reporterName', 'district', 'subject', 'details', 'status', 'resolutionNote', 'createdAt', 'updatedAt'])
+        && data.complaintId == complaintId && isValidId(data.complaintId)
+        && (!('caseNumber' in data) || (data.caseNumber is string && data.caseNumber.size() <= 32))
+        && isValidId(data.reporterUid)
+        && data.reporterName is string && data.reporterName.size() >= 1 && data.reporterName.size() <= 100
+        && data.district is string && data.district.size() >= 1 && data.district.size() <= 60
+        && data.subject is string && data.subject.size() >= 3 && data.subject.size() <= 200
+        && data.details is string && data.details.size() >= 5 && data.details.size() <= 1200
+        && data.status in ['open', 'investigating', 'resolved']
+        && (!('resolutionNote' in data) || (data.resolutionNote is string && data.resolutionNote.size() <= 800))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAuditLog(data, logId) {
+      return data.keys().hasAll(['logId', 'actorUid', 'actorName', 'actorRole', 'action', 'targetPath', 'summary', 'createdAt'])
+        && data.keys().hasOnly(['logId', 'actorUid', 'actorName', 'actorRole', 'action', 'targetPath', 'summary', 'createdAt'])
+        && data.logId == logId && isValidId(data.logId)
+        && isValidId(data.actorUid)
+        && data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 100
+        && data.actorRole is string && data.actorRole.size() >= 1 && data.actorRole.size() <= 40
+        && data.action is string && data.action.size() >= 1 && data.action.size() <= 80
+        && data.targetPath is string && data.targetPath.size() >= 1 && data.targetPath.size() <= 160
+        && data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 300
+        && data.createdAt is timestamp;
+    }
+
+    // 4. Collection Rules
+    match /admins/{adminUid} {
+      allow get: if isValidId(adminUid) && (isAdmin() || (isVerifiedUser() && request.auth.uid == adminUid));
+      allow list: if isBootstrappedAdmin();
+      allow create, update, delete: if isBootstrappedAdmin() && isValidId(adminUid);
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (request.auth.uid == userId || isAdmin() || isOfficerOrSupervisor());
+      allow list: if isBootstrappedAdmin();
+      allow create: if isSignedIn()
+        && isValidId(userId)
+        && request.auth.uid == userId
+        && isValidUserPublic(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (incoming().role in ['citizen', 'dlao_officer', 'panel_lawyer', 'mediator', 'supervisor'] || isAdmin());
+      allow update: if isSignedIn()
+        && isValidId(userId)
+        && isValidUserPublic(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (request.auth.uid == userId
+            && incoming().role == existing().role
+            && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'district', 'barRegistrationNo', 'specialization', 'preferredLanguage', 'updatedAt']))
+        );
+      allow delete: if isAdmin() && isValidId(userId);
+
+      match /private/{docId} {
+        allow get: if isValidId(userId) && isValidId(docId) && (request.auth.uid == userId || isAdmin());
+        allow create: if isSignedIn()
+          && isValidId(userId) && isValidId(docId)
+          && (request.auth.uid == userId || isAdmin())
+          && isValidUserPrivate(incoming(), userId)
+          && incoming().updatedAt == request.time;
+        allow update: if isSignedIn()
+          && isValidId(userId) && isValidId(docId)
+          && (request.auth.uid == userId || isAdmin())
+          && isValidUserPrivate(incoming(), userId)
+          && incoming().uid == existing().uid
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'phone', 'nidLast4', 'address', 'updatedAt']);
+        allow delete: if isAdmin() && isValidId(userId) && isValidId(docId);
+      }
+    }
+
+    match /casePublicStatus/{caseNumber} {
+      allow get: if isValidId(caseNumber);
+      allow list: if isBootstrappedAdmin() || (isSignedIn() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isSignedIn()
+        && isValidId(caseNumber)
+        && isValidCasePublicStatus(incoming(), caseNumber)
+        && (incoming().ownerUid == request.auth.uid || isAdmin())
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(caseNumber)
+        && isValidCasePublicStatus(incoming(), caseNumber)
+        && incoming().caseNumber == existing().caseNumber
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().updatedAt == request.time
+        && (isAdmin() || isOfficerOrSupervisor() || existing().ownerUid == request.auth.uid);
+      allow delete: if isAdmin() && isValidId(caseNumber);
+    }
+
+    match /cases/{caseId} {
+      allow get: if isValidId(caseId) && isSignedIn() && (
+        isAdmin() ||
+        isOfficerOrSupervisor() ||
+        existing().citizenUid == request.auth.uid ||
+        existing().assignedLawyerUid == request.auth.uid ||
+        existing().assignedMediatorUid == request.auth.uid
+      );
+      allow list: if isBootstrappedAdmin() || (isSignedIn() && (
+        resource.data.citizenUid == request.auth.uid ||
+        resource.data.assignedLawyerUid == request.auth.uid ||
+        resource.data.assignedMediatorUid == request.auth.uid
+      ));
+
+      allow create: if isSignedIn()
+        && isValidId(caseId)
+        && isValidLegalCase(incoming(), caseId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/casePublicStatus/$(incoming().caseNumber))
+        && (
+          isAdmin() ||
+          (isOfficerOrSupervisor() && incoming().citizenUid == request.auth.uid) ||
+          (incoming().citizenUid == request.auth.uid
+            && incoming().status == 'submitted'
+            && incoming().eligibilityVerified == false
+            && (!('aiReviewStatus' in incoming()) || incoming().aiReviewStatus == 'pending_review'))
+        );
+
+      allow update: if isSignedIn()
+        && isValidId(caseId)
+        && isValidLegalCase(incoming(), caseId)
+        && incoming().caseId == existing().caseId
+        && incoming().caseNumber == existing().caseNumber
+        && incoming().citizenUid == existing().citizenUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (existing().status != 'closed' && (
+            (existing().citizenUid == request.auth.uid
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'safeContactNote', 'emergencyFlag', 'submittedDocs',
+                'aiClassification', 'aiSummary', 'aiRiskNote',
+                'aiConfidence', 'aiUncertaintyNote', 'aiExtractedFacts', 'aiMissingInfo',
+                'aiFollowUpQuestions', 'aiCitations', 'aiNextSteps', 'updatedAt'
+              ])) ||
+            (isOfficerOrSupervisor()
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'status', 'priority', 'eligibilityVerified',
+                'assignedLawyerUid', 'assignedLawyerName',
+                'assignedMediatorUid', 'assignedMediatorName',
+                'nextHearingDate', 'deadlineDate', 'requiredDocs', 'district',
+                'aiClassification', 'aiSummary', 'aiRiskNote',
+                'aiConfidence', 'aiUncertaintyNote', 'aiExtractedFacts', 'aiMissingInfo',
+                'aiFollowUpQuestions', 'aiCitations', 'aiNextSteps',
+                'aiReviewStatus', 'aiOfficerNote', 'aiReviewedByName', 'updatedAt'
+              ])) ||
+            (isPanelLawyer() && existing().assignedLawyerUid == request.auth.uid
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'status', 'nextHearingDate', 'deadlineDate', 'requiredDocs', 'submittedDocs',
+                'aiClassification', 'aiSummary', 'aiRiskNote',
+                'aiConfidence', 'aiUncertaintyNote', 'aiExtractedFacts', 'aiMissingInfo',
+                'aiFollowUpQuestions', 'aiCitations', 'aiNextSteps', 'updatedAt'
+              ])) ||
+            (isMediatorUser() && existing().assignedMediatorUid == request.auth.uid
+              && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+          ))
+        );
+
+      allow delete: if isAdmin() && isValidId(caseId);
+
+      match /timeline/{eventId} {
+        allow get: if isValidId(caseId) && isValidId(eventId) && isSignedIn() && (
+          isAdmin() || isOfficerOrSupervisor() ||
+          existing().caseOwnerUid == request.auth.uid ||
+          existing().actorUid == request.auth.uid
+        );
+        allow list: if isBootstrappedAdmin() || (isSignedIn() && (
+          resource.data.actorUid == request.auth.uid ||
+          resource.data.caseOwnerUid == request.auth.uid ||
+          resource.data.caseLawyerUid == request.auth.uid
+        ));
+        allow create: if isSignedIn()
+          && isValidId(caseId) && isValidId(eventId)
+          && isValidTimelineEvent(incoming(), eventId, caseId)
+          && incoming().actorUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && existsAfter(/databases/$(database)/documents/cases/$(caseId));
+        allow update, delete: if false;
+      }
+
+      match /messages/{messageId} {
+        allow get: if isValidId(caseId) && isValidId(messageId) && isSignedIn() && (
+          isAdmin() || isOfficerOrSupervisor() ||
+          existing().caseOwnerUid == request.auth.uid ||
+          existing().senderUid == request.auth.uid
+        );
+        allow list: if isBootstrappedAdmin() || (isSignedIn() && (
+          resource.data.senderUid == request.auth.uid ||
+          resource.data.caseOwnerUid == request.auth.uid ||
+          resource.data.caseLawyerUid == request.auth.uid
+        ));
+        allow create: if isSignedIn()
+          && isValidId(caseId) && isValidId(messageId)
+          && isValidCaseMessage(incoming(), messageId, caseId)
+          && incoming().senderUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/cases/$(caseId));
+        allow update, delete: if false;
+      }
+
+      match /documents/{docId} {
+        allow get: if isValidId(caseId) && isValidId(docId) && isSignedIn() && (
+          isAdmin() || isOfficerOrSupervisor() ||
+          existing().caseOwnerUid == request.auth.uid ||
+          existing().caseLawyerUid == request.auth.uid ||
+          existing().uploadedByUid == request.auth.uid
+        );
+        allow list: if isBootstrappedAdmin() || (isSignedIn() && (
+          resource.data.uploadedByUid == request.auth.uid ||
+          resource.data.caseOwnerUid == request.auth.uid ||
+          resource.data.caseLawyerUid == request.auth.uid
+        ));
+        allow create: if isSignedIn()
+          && isValidId(caseId) && isValidId(docId)
+          && isValidCaseDocument(incoming(), docId, caseId)
+          && incoming().uploadedByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && existsAfter(/databases/$(database)/documents/cases/$(caseId));
+        allow update, delete: if false;
+      }
+    }
+
+    match /mediations/{mediationId} {
+      allow get: if isValidId(mediationId) && isSignedIn() && (
+        isAdmin() || isOfficerOrSupervisor() ||
+        existing().citizenUid == request.auth.uid ||
+        existing().mediatorUid == request.auth.uid
+      );
+      allow list: if isBootstrappedAdmin() || (isSignedIn() && (
+        resource.data.citizenUid == request.auth.uid ||
+        resource.data.mediatorUid == request.auth.uid
+      ));
+      allow create: if isSignedIn()
+        && isValidId(mediationId)
+        && isValidMediation(incoming(), mediationId)
+        && (isAdmin() || isOfficerOrSupervisor())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/cases/$(incoming().caseId));
+      allow update: if isSignedIn()
+        && isValidId(mediationId)
+        && isValidMediation(incoming(), mediationId)
+        && incoming().mediationId == existing().mediationId
+        && incoming().caseId == existing().caseId
+        && incoming().citizenUid == existing().citizenUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (existing().outcome != 'settled_amicably' && (
+            (existing().citizenUid == request.auth.uid
+              && incoming().diff(existing()).affectedKeys().hasOnly(['applicantConfirmed', 'updatedAt'])) ||
+            ((isOfficerOrSupervisor() || existing().mediatorUid == request.auth.uid)
+              && incoming().diff(existing()).affectedKeys().hasOnly(['scheduledAt', 'mode', 'applicantConfirmed', 'respondentConfirmed', 'outcome', 'settlementTerms', 'updatedAt']))
+          ))
+        );
+      allow delete: if isAdmin() && isValidId(mediationId);
+    }
+
+    match /referrals/{referralId} {
+      allow get: if isValidId(referralId) && isSignedIn() && (
+        isAdmin() || isOfficerOrSupervisor() ||
+        existing().citizenUid == request.auth.uid ||
+        existing().requestedByUid == request.auth.uid
+      );
+      allow list: if isBootstrappedAdmin() || (isSignedIn() && (
+        resource.data.citizenUid == request.auth.uid ||
+        resource.data.requestedByUid == request.auth.uid
+      ));
+      allow create: if isSignedIn()
+        && isValidId(referralId)
+        && isValidReferral(incoming(), referralId)
+        && (isAdmin() || isOfficerOrSupervisor())
+        && incoming().requestedByUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/cases/$(incoming().caseId));
+      allow update: if isSignedIn()
+        && isValidId(referralId)
+        && isValidReferral(incoming(), referralId)
+        && incoming().referralId == existing().referralId
+        && incoming().caseId == existing().caseId
+        && incoming().citizenUid == existing().citizenUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (isAdmin() || (isOfficerOrSupervisor() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'handledByUid', 'updatedAt'])));
+      allow delete: if isAdmin() && isValidId(referralId);
+    }
+
+    match /committeeMeetings/{meetingId} {
+      allow get: if isValidId(meetingId) && isSignedIn() && (isAdmin() || isOfficerOrSupervisor() || existing().createdByUid == request.auth.uid);
+      allow list: if isBootstrappedAdmin() || (isSignedIn() && resource.data.createdByUid == request.auth.uid);
+      allow create: if isSignedIn()
+        && isValidId(meetingId)
+        && isValidMeeting(incoming(), meetingId)
+        && (isAdmin() || isOfficerOrSupervisor())
+        && incoming().createdByUid == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update, delete: if isAdmin() && isValidId(meetingId);
+    }
+
+    match /complaints/{complaintId} {
+      allow get: if isValidId(complaintId) && isSignedIn() && (isAdmin() || isOfficerOrSupervisor() || existing().reporterUid == request.auth.uid);
+      allow list: if isBootstrappedAdmin() || (isSignedIn() && resource.data.reporterUid == request.auth.uid);
+      allow create: if isSignedIn()
+        && isValidId(complaintId)
+        && isValidComplaint(incoming(), complaintId)
+        && incoming().reporterUid == request.auth.uid
+        && incoming().status == 'open'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(complaintId)
+        && isValidComplaint(incoming(), complaintId)
+        && incoming().complaintId == existing().complaintId
+        && incoming().reporterUid == existing().reporterUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (isAdmin() || (isOfficerOrSupervisor() && existing().status != 'resolved' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'resolutionNote', 'updatedAt'])));
+      allow delete: if isAdmin() && isValidId(complaintId);
+    }
+
+    match /auditLogs/{logId} {
+      allow get: if isValidId(logId) && isSignedIn() && (isAdmin() || isOfficerOrSupervisor() || existing().actorUid == request.auth.uid);
+      allow list: if isBootstrappedAdmin() || (isSignedIn() && resource.data.actorUid == request.auth.uid);
+      allow create: if isSignedIn()
+        && isValidId(logId)
+        && isValidAuditLog(incoming(), logId)
+        && incoming().actorUid == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+  }
+}
